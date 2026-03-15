@@ -18,13 +18,15 @@ def read_lines(filepath):
         return []
 
 
-def save_results(data_list, filename):
+def init_result_file(filename):
     os.makedirs(os.path.dirname(filename) or ".", exist_ok=True)
+    open(filename, "w", encoding="utf-8").close()
 
-    with open(filename, "w", encoding="utf-8") as f:
-        for data in data_list:
-            f.write(f"=== IP: {data['IP']} ===\n")
-            for k, v in data.items():
-                if k != "IP":
-                    f.write(f"{k}: {v}\n")
-            f.write("\n")
+
+def append_result(data, filename):
+    with open(filename, "a", encoding="utf-8") as f:
+        f.write(f"=== IP: {data['IP']} ===\n")
+        for k, v in data.items():
+            if k != "IP":
+                f.write(f"{k}: {v}\n")
+        f.write("\n")

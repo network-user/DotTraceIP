@@ -14,6 +14,24 @@ def format_proxy_url(proxy_string, proxy_type):
     return f"{proxy_type}://{proxy_string}"
 
 
+def hide_credentials(proxy_string):
+    try:
+        if "@" in proxy_string:
+            clean_str = proxy_string.split("@")[-1]
+            ip = clean_str.split(":")[0]
+        else:
+            ip = proxy_string.split(":")[0]
+
+        ip_parts = ip.split(".")
+        if len(ip_parts) == 4:
+            ip_parts[-1] = "***"
+            return ".".join(ip_parts)
+
+        return "***.***.***.***"
+    except Exception:
+        return "Скрыто"
+
+
 def check_single_proxy(proxy, proxy_type):
     proxy_url = format_proxy_url(proxy, proxy_type)
     proxies = {"http": proxy_url, "https": proxy_url}
@@ -50,7 +68,8 @@ def get_ip_info(ip, proxies_list=None, proxy_type="http"):
             proxy = random.choice(proxies_list)
             proxy_url = format_proxy_url(proxy, proxy_type)
             req_proxies = {"http": proxy_url, "https": proxy_url}
-            info["Proxy"] = proxy
+
+            info["Proxy"] = hide_credentials(proxy)
 
         res = requests.get(
             f"http://ip-api.com/json/{ip}?lang=ru", proxies=req_proxies, timeout=8
@@ -61,8 +80,8 @@ def get_ip_info(ip, proxies_list=None, proxy_type="http"):
             info["City"] = res.get("city", "")
             info["ISP"] = res.get("isp", "")
             info["ASN"] = res.get("as", "")
-    except Exception:
-        info["Proxy"] = "Ошибка соединения"
+    except Exception as e:
+        info["Proxy"] = f"Ошибка: {e}"
 
     try:
         obj = IPWhois(ip)

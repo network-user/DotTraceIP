@@ -7,8 +7,15 @@ import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 
 
+def format_proxy_url(proxy_string, proxy_type):
+    if "@" not in proxy_string and proxy_string.count(":") == 3:
+        ip, port, user, pwd = proxy_string.split(":")
+        return f"{proxy_type}://{user}:{pwd}@{ip}:{port}"
+    return f"{proxy_type}://{proxy_string}"
+
+
 def check_single_proxy(proxy, proxy_type):
-    proxy_url = f"{proxy_type}://{proxy}"
+    proxy_url = format_proxy_url(proxy, proxy_type)
     proxies = {"http": proxy_url, "https": proxy_url}
     try:
         res = requests.get("http://ip-api.com/json/8.8.8.8", proxies=proxies, timeout=5)
@@ -41,7 +48,7 @@ def get_ip_info(ip, proxies_list=None, proxy_type="http"):
         req_proxies = None
         if proxies_list:
             proxy = random.choice(proxies_list)
-            proxy_url = f"{proxy_type}://{proxy}"
+            proxy_url = format_proxy_url(proxy, proxy_type)
             req_proxies = {"http": proxy_url, "https": proxy_url}
             info["Proxy"] = proxy
 

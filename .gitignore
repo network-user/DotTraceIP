@@ -1,16 +1,16 @@
 __pycache__/
-.idea/
 *.py[cod]
 *$py.class
 venv/
 env/
 .env
 
+.idea/
+
 config.json
 
 data/*.txt
 data/*.csv
 data/*.log
-
 
 !data/*.example.txt

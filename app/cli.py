@@ -1,3 +1,4 @@
+import os
 import sys
 from rich.console import Console
 from rich.prompt import Prompt, IntPrompt
@@ -10,8 +11,11 @@ from app.engine import run_proxy_check, run_scan
 console = Console()
 
 
+def clear_screen():
+    os.system("cls" if os.name == "nt" else "clear")
+
+
 def pause():
-    """Приостанавливает выполнение до нажатия Enter."""
     console.input(
         "\n[bold black on white] Нажмите Enter для продолжения... [/bold black on white]"
     )
@@ -19,7 +23,7 @@ def pause():
 
 def settings_menu(config):
     while True:
-        console.clear()
+        clear_screen()
         console.print("\n[bold cyan]--- НАСТРОЙКИ СИСТЕМЫ ---[/bold cyan]")
         console.print(f"[1] Потоки: [cyan]{config['threads']}[/cyan]")
         console.print(f"[2] Тип прокси: [cyan]{config['proxy_type']}[/cyan]")
@@ -51,7 +55,7 @@ def settings_menu(config):
 
 def proxy_menu(config):
     while True:
-        console.clear()
+        clear_screen()
         console.print("\n[bold cyan]--- МЕНЕДЖЕР ПРОКСИ ---[/bold cyan]")
         console.print(
             f"Текущий файл: [cyan]{config['proxies_file']}[/cyan] | Тип: [cyan]{config['proxy_type']}[/cyan]"
@@ -99,7 +103,7 @@ def run_app():
     config = load_config()
 
     while True:
-        console.clear()
+        clear_screen()
         console.print(
             Panel.fit(
                 "[bold cyan]DotTraceIP - Главное меню[/bold cyan]\n"
@@ -132,6 +136,6 @@ def run_app():
         elif choice == "3":
             proxy_menu(config)
         elif choice == "0":
-            console.clear()
+            clear_screen()
             console.print("[bold cyan]Завершение работы.[/bold cyan]")
             sys.exit(0)

@@ -11,7 +11,7 @@
 Клонируйте репозиторий и установите зависимости:
 
 ```bash
-git clone https://github.com/ВАШ_НИК/DotTraceIP.git
+git clone https://github.com/network-user/DotTraceIP.git
 cd DotTraceIP
 pip install -r requirements.txt
 ```

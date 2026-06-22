@@ -11,10 +11,10 @@ alwaysApply: true
 
 ## Кратко
 
-- **Тип:** cli
-- **Установка:** `pip install -r requirements.txt`
+- **Тип:** cli (async-анализ IP)
+- **Установка:** `pip install -e ".[dev]"`
 - **Dev:** `python main.py`
-- **Тесты:** нет
+- **Тесты:** `pytest` · **Typecheck:** `mypy app/`
 
 ## Правила
 
@@ -22,7 +22,11 @@ alwaysApply: true
 - README в стандарте DotCore: без marketing, без `<details>`, без centered hero.
 - Обложка: `docs/cover.svg` + `<img src="docs/cover.svg" width="720">`.
 - LoC-бейдж - 4-й в строке header, между `<!-- loc:start -->` и `<!-- loc:end -->`.
-- При глобальных изменениях (команды, модули, зависимости, архитектура) обнови README через скилл `generate-readme`.
+- Async: HTTP через `aiohttp`, блокирующие вызовы - через `run_in_executor`; новые источники - `_part_*` в `asyncio.gather`.
+- Не меняй сигнатуры синхронных обёрток `run_scan` / `run_proxy_check`.
+- Контракт результата: ключи `network.empty_info` = столбцы `export.COLUMNS`.
+- UI и документация - на русском. `config.json`, `data/*`, API-ключи - не коммитить.
+- При глобальных изменениях (команды, модули, зависимости, источники, архитектура) обнови README через скилл `generate-readme`.
 - Минимальный scope изменений.
 
 ## README

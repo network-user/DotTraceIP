@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dottraceip"
+version = "2.0.0"
+description = "Async CLI для массового анализа IP-адресов: геолокация, ASN/BGP, reverse DNS, репутация"
+requires-python = ">=3.12"
+dependencies = [
+    "aiohttp>=3.9,<3.14",
+    "aiohttp-socks>=0.8",
+    "dnspython>=2.0",
+    "ipwhois>=1.2",
+    "rich>=13.7",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "aioresponses>=0.7.6",
+    "mypy>=1.8",
+]
+
+[tool.setuptools]
+packages = ["app"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.12"
+files = ["app"]
+ignore_missing_imports = true
+warn_unused_ignores = false

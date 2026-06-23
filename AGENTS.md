@@ -25,8 +25,10 @@ python main.py
 |----------|---------|
 | Установка | `pip install -r requirements.txt` |
 | Установка (dev) | `pip install -e ".[dev]"` |
-| Запуск | `python main.py` |
-| Тесты | `pytest` |
+| Запуск (TUI) | `python main.py` |
+| Запуск (headless) | `python main.py scan <файл> [--export …]` |
+| Тесты | `pytest` (CI: `pytest --cov=app`) |
+| Lint | `ruff check app tests` |
 | Typecheck | `mypy app/` |
 | Build | - |
 
@@ -83,7 +85,7 @@ DotTraceIP/
 ## Что делать агенту
 
 - Перед правками прочитай затронутые файлы и соседний код.
-- После изменений запусти `pytest` и `mypy app/`; для UI - вручную проверь `python main.py`.
+- После изменений запусти `ruff check app tests`, `pytest` и `mypy app/`; для UI - вручную проверь `python main.py`.
 - **README-sync:** при глобальных изменениях функционала (новые/удалённые команды, модули, зависимости, источники, смена архитектуры или runtime) обнови `README.md` и `AGENTS.md` через скилл `generate-readme` - в том числе пересчёт LoC. Мелкие правки (опечатки, внутренний рефактор) README не трогают.
 - Не латай разметку README вручную - перегенерируй скиллом.
 - Минимальный diff - не рефактори несвязанный код.

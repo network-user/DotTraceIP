@@ -33,7 +33,7 @@ def load_config(path: str = CONFIG_FILE) -> dict[str, Any]:
         return defaults
 
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             data = json.load(f)
     except (json.JSONDecodeError, OSError):
         return defaults

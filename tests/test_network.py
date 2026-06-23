@@ -145,6 +145,22 @@ async def test_part_geo_http_error() -> None:
     assert out == {}
 
 
+async def test_part_geo_retries_on_429(monkeypatch) -> None:
+    slept: list[float] = []
+
+    async def fake_sleep(delay: float) -> None:
+        slept.append(delay)
+
+    monkeypatch.setattr(net.asyncio, "sleep", fake_sleep)
+    with aioresponses() as m:
+        m.get(IP_API_RE, status=429)  # первая попытка - rate limit
+        m.get(IP_API_RE, payload={"status": "success", "country": "США"})  # ретрай ок
+        async with aiohttp.ClientSession() as session:
+            out = await net._part_geo(session, "8.8.8.8")
+    assert out["Country"] == "США"
+    assert slept  # был backoff перед повтором
+
+
 async def test_part_bgpview_parses(bgpview_payload) -> None:
     with aioresponses() as m:
         m.get(BGPVIEW_RE, payload=bgpview_payload)
@@ -174,7 +190,9 @@ async def test_part_abuseipdb_parses(abuseipdb_payload) -> None:
 # --------------------------------------------------------------------------- #
 # get_ip_info (async, интеграция источников)
 # --------------------------------------------------------------------------- #
-async def test_get_ip_info_merges_sources(no_blocking, base_config, geo_payload, bgpview_payload) -> None:
+async def test_get_ip_info_merges_sources(
+    no_blocking, base_config, geo_payload, bgpview_payload
+) -> None:
     with aioresponses() as m:
         m.get(IP_API_RE, payload=geo_payload)
         m.get(BGPVIEW_RE, payload=bgpview_payload)

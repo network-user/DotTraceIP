@@ -36,6 +36,11 @@ def test_filter_valid_ips_splits() -> None:
     assert invalid == ["garbage", "1.2.3"]
 
 
+def test_dedup_preserve_order() -> None:
+    items = ["8.8.8.8", "1.1.1.1", "8.8.8.8", "9.9.9.9", "1.1.1.1"]
+    assert utils.dedup_preserve(items) == ["8.8.8.8", "1.1.1.1", "9.9.9.9"]
+
+
 def test_init_result_file_creates_dir_and_empties(tmp_path) -> None:
     target = tmp_path / "sub" / "out.txt"
     utils.init_result_file(str(target))

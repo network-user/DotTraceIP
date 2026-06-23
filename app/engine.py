@@ -1,5 +1,6 @@
 import asyncio
 import os
+from collections.abc import Callable
 from typing import Any
 
 from rich.console import Console, Group
@@ -16,7 +17,7 @@ from rich.table import Table
 
 from app.export import export_csv, export_html, export_json
 from app.network import NO_DATA, check_single_proxy, get_ip_info
-from app.utils import append_result, init_result_file
+from app.utils import append_result, dedup_preserve, init_result_file
 
 
 # --------------------------------------------------------------------------- #
@@ -128,9 +129,12 @@ async def _scan_async(
     proxies: list[str] | None,
     config: dict[str, Any],
     console: Console,
+    *,
+    use_live: bool = True,
 ) -> list[dict[str, Any]]:
     results: list[dict[str, Any]] = []
     recent: list[dict[str, Any]] = []
+    total = len(targets)
     proxy_type = str(config.get("proxy_type", "http"))
     proxy_list = proxies if proxies else None
 
@@ -143,7 +147,7 @@ async def _scan_async(
         TaskProgressColumn(),
         TextColumn("[cyan]{task.completed}/{task.total}"),
     )
-    task = progress.add_task("Инициализация...", total=len(targets))
+    task = progress.add_task("Инициализация...", total=total)
 
     def renderable() -> Group:
         return Group(
@@ -164,8 +168,9 @@ async def _scan_async(
             except Exception as exc:
                 return {"IP": ip, "Status": "Error", "Error_Msg": str(exc)}
 
-    with Live(renderable(), console=console, refresh_per_second=4) as live:
-        tasks = [asyncio.create_task(worker(ip)) for ip in targets]
+    tasks = [asyncio.create_task(worker(ip)) for ip in targets]
+
+    async def consume(on_update: Callable[[dict[str, Any] | None], None]) -> None:
         try:
             for future in asyncio.as_completed(tasks):
                 data = await future
@@ -181,7 +186,7 @@ async def _scan_async(
                 else:
                     desc = f"Обработка: [bold green]{ip}[/bold green]"
                 progress.update(task, advance=1, description=desc)
-                live.update(renderable())
+                on_update(data)
         except (KeyboardInterrupt, asyncio.CancelledError):
             for t in tasks:
                 t.cancel()
@@ -190,7 +195,23 @@ async def _scan_async(
                 task,
                 description="[bold red]Остановка процесса... ожидание активных задач.[/bold red]",
             )
-            live.update(renderable())
+            on_update(None)
+
+    if use_live:
+        with Live(renderable(), console=console, refresh_per_second=4) as live:
+            await consume(lambda data: live.update(renderable()))
+    else:
+        def report(data: dict[str, Any] | None) -> None:
+            if data is None:
+                return
+            ip = data.get("IP", "?")
+            if data.get("Status") == "Error":
+                console.print(f"[{len(results)}/{total}] [red]{ip} - ошибка[/red]")
+            else:
+                console.print(f"[{len(results)}/{total}] {ip} - {data.get('Country', NO_DATA)}")
+
+        console.print(f"[cyan]Сканирую {total} IP...[/cyan]")
+        await consume(report)
 
     return results
 
@@ -226,10 +247,17 @@ def run_scan(
     proxies: list[str] | None,
     config: dict[str, Any],
     console: Console,
+    *,
+    use_live: bool = True,
 ) -> None:
-    """Синхронная обёртка для CLI: сканирует цели через asyncio и экспортирует."""
+    """Синхронная обёртка для CLI/headless: сканирует цели через asyncio и экспортирует."""
+    unique = dedup_preserve(targets)
+    if len(unique) < len(targets):
+        console.print(f"[yellow]Убрано дубликатов IP: {len(targets) - len(unique)}[/yellow]")
+    targets = unique
+
     try:
-        results = asyncio.run(_scan_async(targets, proxies, config, console))
+        results = asyncio.run(_scan_async(targets, proxies, config, console, use_live=use_live))
     except KeyboardInterrupt:
         results = []
 

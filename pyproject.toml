@@ -19,8 +19,10 @@ dependencies = [
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
+    "pytest-cov>=4.0",
     "aioresponses>=0.7.6",
     "mypy>=1.8",
+    "ruff>=0.6",
 ]
 
 [tool.setuptools]
@@ -35,3 +37,13 @@ python_version = "3.12"
 files = ["app"]
 ignore_missing_imports = true
 warn_unused_ignores = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "W"]
+
+[tool.coverage.run]
+source = ["app"]

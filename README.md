@@ -22,7 +22,7 @@
 - **Экспорт**: TXT, JSON, CSV и самодостаточный HTML с сортировкой по столбцам без внешних зависимостей.
 - **Async-движок**: до N IP параллельно (семафор), живой Rich-дашборд с журналом последних результатов.
 
-6 источников данных на один IP, 4 формата экспорта, 59 тестов.
+6 источников данных на один IP, 4 формата экспорта, 64 теста.
 
 ## Запуск
 
@@ -33,14 +33,22 @@ python main.py
 
 Первый запуск создаёт `data/target_ips.txt` и `data/proxies.txt`. Добавь IP-адреса (по одному в строке), при необходимости прокси, затем выбери «Запустить сканирование» в меню. Ключ AbuseIPDB и формат экспорта задаются в «Настройки системы».
 
+Для автоматизации и анализа логов есть неинтерактивный режим:
+
+```bash
+python main.py scan logs.txt --export csv
+```
+
 ## Команды
 
 | Команда | Назначение |
 |---------|------------|
 | `pip install -r requirements.txt` | установка runtime-зависимостей |
 | `python main.py` | интерактивное TUI-меню |
+| `python main.py scan logs.txt` | неинтерактивный скан файла с IP |
 | `pip install -e ".[dev]"` | установка с dev-зависимостями |
 | `pytest` | запуск тестов |
+| `ruff check app tests` | линтер |
 | `mypy app/` | проверка типов |
 
 ## Стек
@@ -61,11 +69,12 @@ python main.py
 
 ```bash
 pip install -e ".[dev]"
-pytest
+ruff check app tests
+pytest --cov=app
 mypy app/
 ```
 
-59 тестов на `pytest` + `pytest-asyncio` + `aioresponses` (мок aiohttp). GitHub Actions гоняет `pytest` и `mypy app/` на Python 3.12 при push и pull request в `main`.
+64 теста на `pytest` + `pytest-asyncio` + `aioresponses` (мок aiohttp). GitHub Actions гоняет `ruff`, `pytest --cov` и `mypy app/` на Python 3.12 при push и pull request в `main`.
 
 ## Архитектура
 

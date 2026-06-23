@@ -30,7 +30,8 @@ def _onoff(value: bool) -> str:
 def settings_menu(config: dict[str, Any]) -> None:
     while True:
         clear_screen()
-        key_status = "[green]задан[/green]" if config.get("abuseipdb_api_key") else "[red]не задан[/red]"
+        has_key = bool(config.get("abuseipdb_api_key"))
+        key_status = "[green]задан[/green]" if has_key else "[red]не задан[/red]"
         console.print("\n[bold cyan]--- НАСТРОЙКИ СИСТЕМЫ ---[/bold cyan]")
         console.print(f"[1] Потоки: [cyan]{config['threads']}[/cyan]")
         console.print(f"[2] Тип прокси: [cyan]{config['proxy_type']}[/cyan]")
@@ -40,7 +41,8 @@ def settings_menu(config: dict[str, Any]) -> None:
         console.print(f"[6] Формат экспорта: [cyan]{config.get('export_format', 'txt')}[/cyan]")
         console.print(f"[7] AbuseIPDB ключ: {key_status}")
         console.print(f"[8] Проверка Spamhaus: {_onoff(config.get('enable_spamhaus', True))}")
-        console.print(f"[9] Обогащение BGP/ASN (Team Cymru): {_onoff(config.get('enable_bgp', True))}")
+        bgp_state = _onoff(config.get("enable_bgp", True))
+        console.print(f"[9] Обогащение BGP/ASN (Team Cymru): {bgp_state}")
         console.print("[0] Назад")
 
         choice = Prompt.ask(

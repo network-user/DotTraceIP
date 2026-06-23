@@ -66,15 +66,28 @@ async def _get_json(
     *,
     headers: dict[str, str] | None = None,
     params: dict[str, str] | None = None,
+    retries: int = 0,
+    backoff: float = 2.0,
 ) -> dict[str, Any] | None:
-    """GET с тихим возвратом None при любой ошибке/не-200."""
-    try:
-        async with session.get(url, headers=headers, params=params) as resp:
-            if resp.status == 200:
-                data = await resp.json(content_type=None)
-                return data if isinstance(data, dict) else None
-    except Exception:
-        return None
+    """GET с тихим возвратом None при любой ошибке/не-200.
+
+    На 429 (rate limit) делает до ``retries`` повторов с задержкой: уважает
+    заголовок ``X-Ttl`` (ip-api), но ждёт не дольше 10 секунд на попытку.
+    """
+    for attempt in range(retries + 1):
+        try:
+            async with session.get(url, headers=headers, params=params) as resp:
+                if resp.status == 200:
+                    data = await resp.json(content_type=None)
+                    return data if isinstance(data, dict) else None
+                if resp.status == 429 and attempt < retries:
+                    ttl = resp.headers.get("X-Ttl", "")
+                    delay = min(float(ttl), 10.0) if ttl.isdigit() else backoff * (attempt + 1)
+                    await asyncio.sleep(delay)
+                    continue
+                return None
+        except Exception:
+            return None
     return None
 
 
@@ -215,6 +228,7 @@ async def _part_geo(session: aiohttp.ClientSession, ip: str) -> dict[str, Any]:
         session,
         f"http://ip-api.com/json/{ip}",
         params={"lang": "ru", "fields": "status,country,city,isp,as,lat,lon"},
+        retries=2,
     )
     if not data or data.get("status") != "success":
         return {}

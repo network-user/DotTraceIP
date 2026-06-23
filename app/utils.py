@@ -20,7 +20,7 @@ def init_files() -> None:
 def read_lines(filepath: str) -> list[str]:
     """Читает непустые строки файла, обрезая пробелы. Нет файла -> []."""
     try:
-        with open(filepath, "r", encoding="utf-8") as f:
+        with open(filepath, encoding="utf-8") as f:
             return [line.strip() for line in f if line.strip()]
     except FileNotFoundError:
         return []
@@ -42,6 +42,14 @@ def filter_valid_ips(values: list[str]) -> tuple[list[str], list[str]]:
     for value in values:
         (valid if is_valid_ip(value) else invalid).append(value)
     return valid, invalid
+
+
+def dedup_preserve(items: list[str]) -> list[str]:
+    """Убирает дубликаты, сохраняя порядок первого вхождения.
+
+    В логах сервера один IP встречается сотни раз - дедуп экономит запросы.
+    """
+    return list(dict.fromkeys(items))
 
 
 def init_result_file(filename: str) -> None:

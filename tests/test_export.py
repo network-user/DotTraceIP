@@ -111,3 +111,54 @@ def test_ordered_columns_appends_unknown_keys() -> None:
     cols = export._ordered_columns(results)
     assert cols[0] == "IP"
     assert "Custom_Field" in cols
+
+
+# --------------------------------------------------------------------------- #
+# Безопасность экспорта (CSV-инъекция, атомарная запись)
+# --------------------------------------------------------------------------- #
+def test_export_csv_neutralizes_formula_injection(tmp_path) -> None:
+    # Поля из недоверенных источников (PTR/whois) не должны исполняться как формулы.
+    results = [
+        {"IP": "8.8.8.8", "Hostname": "=cmd|'/c calc'!A1", "ISP": "+evil", "Status": "OK"}
+    ]
+    path = tmp_path / "r.csv"
+    export.export_csv(results, str(path))
+
+    with open(path, encoding="utf-8", newline="") as f:
+        row = next(csv.DictReader(f))
+    assert row["Hostname"].startswith("'=")
+    assert row["ISP"].startswith("'+")
+
+
+def test_export_csv_neutralizes_leading_whitespace_formula(tmp_path) -> None:
+    # Ведущий пробел не должен позволять формуле проскочить санитайзер.
+    results = [{"IP": "8.8.8.8", "Hostname": " =SUM(A1)", "Status": "OK"}]
+    path = tmp_path / "r.csv"
+    export.export_csv(results, str(path))
+
+    with open(path, encoding="utf-8", newline="") as f:
+        row = next(csv.DictReader(f))
+    assert row["Hostname"].startswith("'")
+
+
+def test_export_csv_keeps_numbers_intact(tmp_path, sample_results) -> None:
+    # Отрицательные координаты (float) не должны получать ведущий апостроф.
+    path = tmp_path / "r.csv"
+    export.export_csv(sample_results, str(path))
+
+    with open(path, encoding="utf-8", newline="") as f:
+        rows = list(csv.DictReader(f))
+    row = next(r for r in rows if r["IP"] == "1.1.1.1")
+    assert row["Lat"] == "-33.49"
+
+
+def test_export_leaves_no_tmp_file(tmp_path, sample_results) -> None:
+    for ext, fn in (
+        ("json", export.export_json),
+        ("csv", export.export_csv),
+        ("html", export.export_html),
+    ):
+        path = tmp_path / f"r.{ext}"
+        fn(sample_results, str(path))
+        assert path.exists()
+        assert not (tmp_path / f"r.{ext}.tmp").exists()

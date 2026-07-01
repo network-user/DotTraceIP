@@ -4,16 +4,23 @@
   <img src="https://img.shields.io/badge/Python-3.12%2B-3776AB?style=flat" alt="Python" />
   <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-555?style=flat" alt="Platform" />
   <img src="https://img.shields.io/badge/Category-CLI%20%2F%20Network-orange?style=flat" alt="Category" />
-  <!-- loc:start --><img src="https://img.shields.io/badge/lines_of_code-1k%2B-lightgrey?style=flat" alt="1k+ lines of code" /><!-- loc:end -->
+  <!-- loc:start --><img src="https://img.shields.io/badge/lines_of_code-2440-lightgrey?style=flat" alt="2440 lines of code" /><!-- loc:end -->
 </p>
 
 <img src="docs/cover.svg" width="720" alt="DotTraceIP" />
+
+<!-- audit:start -->
+<p>
+  <a href="docs/audit/latest.md"><img src="https://img.shields.io/badge/security_audit-passed-3fb950?style=flat" alt="security audit passed - full, leaks + code" /></a>
+  <a href="docs/audit/2026-07-01-slate-harbor.md"><img src="https://img.shields.io/badge/date-2026--07--01-555?style=flat" alt="audit date" /></a>
+</p>
+<!-- audit:end -->
 
 Асинхронный CLI для массового анализа IP-адресов: геолокация, ASN и BGP-префикс, обратный DNS, проверка репутации. Инструмент вырос из практической задачи - разобрать по логам сервера, из каких стран боты перебирают пароли к SSH/RDP; так же подходит для анализа трафика сайта или продукта. Движок на `asyncio` + `aiohttp` опрашивает по каждому IP несколько источников параллельно и пишет отчёт в TXT, JSON, CSV или HTML.
 
 ## Что внутри
 
-- **Геолокация**: страна, город, координаты, ISP через ip-api.com.
+- **Геолокация**: страна, город, координаты, ISP через ip-api.com (HTTPS при заданном ip-api Pro-ключе).
 - **ASN и BGP**: номер и имя автономной системы, BGP-префикс (CIDR), country_code через Team Cymru (DNS), HTTP-фолбэк на bgpview.io.
 - **Сеть владельца**: CIDR через RDAP (ipwhois).
 - **Обратный DNS**: PTR-запись хоста.
@@ -22,7 +29,7 @@
 - **Экспорт**: TXT, JSON, CSV и самодостаточный HTML с сортировкой по столбцам без внешних зависимостей.
 - **Async-движок**: до N IP параллельно (семафор), живой Rich-дашборд с журналом последних результатов.
 
-6 источников данных на один IP, 4 формата экспорта, 64 теста.
+6 источников данных на один IP, 4 формата экспорта, 82 теста.
 
 ## Запуск
 
@@ -31,7 +38,7 @@ pip install -r requirements.txt
 python main.py
 ```
 
-Первый запуск создаёт `data/target_ips.txt` и `data/proxies.txt`. Добавь IP-адреса (по одному в строке), при необходимости прокси, затем выбери «Запустить сканирование» в меню. Ключ AbuseIPDB и формат экспорта задаются в «Настройки системы».
+Первый запуск создаёт `data/target_ips.txt` и `data/proxies.txt`. Добавь IP-адреса (по одному в строке), при необходимости прокси, затем выбери «Запустить сканирование» в меню. Ключи AbuseIPDB и ip-api Pro (HTTPS-геолокация) и формат экспорта задаются в «Настройки системы».
 
 Для автоматизации и анализа логов есть неинтерактивный режим:
 
@@ -74,7 +81,7 @@ pytest --cov=app
 mypy app/
 ```
 
-64 теста на `pytest` + `pytest-asyncio` + `aioresponses` (мок aiohttp). GitHub Actions гоняет `ruff`, `pytest --cov` и `mypy app/` на Python 3.12 при push и pull request в `main`.
+82 теста на `pytest` + `pytest-asyncio` + `aioresponses` (мок aiohttp). GitHub Actions гоняет `ruff`, `pytest --cov`, `mypy app/` и `pip-audit` на Python 3.12 при push и pull request в `main`; Dependabot обновляет зависимости pip и GitHub Actions.
 
 ## Архитектура
 
@@ -94,8 +101,10 @@ DotTraceIP/
 │   ├── config.py        # load/save config.json с merge дефолтов
 │   └── utils.py         # файлы, валидация IP
 ├── tests/               # pytest + pytest-asyncio + aioresponses
-├── .github/workflows/
-│   └── ci.yml           # pytest + mypy на Python 3.12
+├── .github/
+│   ├── workflows/ci.yml # ruff + pytest + mypy + pip-audit
+│   └── dependabot.yml   # обновления pip + github-actions
+├── docs/audit/          # отчёты pre-deploy-audit (latest.md)
 └── data/                # входные/выходные данные (не в git)
 ```
 

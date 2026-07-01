@@ -1,8 +1,10 @@
 import asyncio
 import ipaddress
+import json
 import random
 import socket
 import warnings
+from collections.abc import Callable
 from typing import Any
 
 import aiohttp
@@ -10,11 +12,25 @@ import dns.resolver
 from aiohttp_socks import ProxyConnector
 from ipwhois import IPWhois
 
-warnings.filterwarnings("ignore", category=UserWarning)
+# Глушим UserWarning только от прокси/whois-библиотек, а не глобально, чтобы не
+# прятать предупреждения из нашего кода и стандартной библиотеки.
+for _noisy_module in ("aiohttp_socks", "python_socks", "ipwhois"):
+    warnings.filterwarnings("ignore", category=UserWarning, module=_noisy_module)
 
 NO_DATA = "Нет данных"
 DEFAULT_TIMEOUT = 8
 PROXY_TIMEOUT = 5
+# Потолок размера тела ответа: защита от раздувания памяти (злой прокси/MITM).
+MAX_RESPONSE_BYTES = 4 * 1024 * 1024
+# Таймаут на блокирующие резолверы в thread pool (reverse DNS, RDAP, Spamhaus).
+BLOCKING_TIMEOUT = 6.0
+# ip-api.com: бесплатный тариф отдаёт только HTTP. По этому каналу идёт лишь
+# публичный целевой IP и общедоступная геолокация, без ключей и кредов. Для TLS
+# задай ip-api Pro-ключ (config.ip_api_key) - тогда запрос идёт по HTTPS через
+# pro.ip-api.com. Данные ip-api не считаем доверенными - BGP/ASN дублируются
+# через Team Cymru (DNS) и bgpview (HTTPS).
+GEO_API_URL = "http://ip-api.com/json/"
+GEO_API_PRO_URL = "https://pro.ip-api.com/json/"
 
 
 # --------------------------------------------------------------------------- #
@@ -78,11 +94,24 @@ async def _get_json(
         try:
             async with session.get(url, headers=headers, params=params) as resp:
                 if resp.status == 200:
-                    data = await resp.json(content_type=None)
+                    # Потолок на тело ответа применяется к фактически прочитанным
+                    # байтам (в т.ч. chunked без Content-Length); объём также
+                    # ограничен общим таймаутом запроса.
+                    raw = await resp.read()
+                    if len(raw) > MAX_RESPONSE_BYTES:
+                        return None
+                    try:
+                        data = json.loads(raw)
+                    except (json.JSONDecodeError, ValueError):
+                        return None
                     return data if isinstance(data, dict) else None
                 if resp.status == 429 and attempt < retries:
                     ttl = resp.headers.get("X-Ttl", "")
-                    delay = min(float(ttl), 10.0) if ttl.isdigit() else backoff * (attempt + 1)
+                    delay = (
+                        min(float(ttl), 10.0)
+                        if ttl.isascii() and ttl.isdigit()
+                        else backoff * (attempt + 1)
+                    )
                     await asyncio.sleep(delay)
                     continue
                 return None
@@ -205,31 +234,54 @@ def _cymru_asname(asn: str) -> str | None:
 # --------------------------------------------------------------------------- #
 # Сборщики (partial dict per источник)
 # --------------------------------------------------------------------------- #
+async def _run_blocking(
+    loop: asyncio.AbstractEventLoop, func: Callable[[str], Any], ip: str
+) -> Any:
+    """Блокирующий резолвер в thread pool с жёстким таймаутом.
+
+    reverse DNS / RDAP / Spamhaus используют системный резолвер без программного
+    таймаута; без обёртки зависший DNS забивает пул потоков и тормозит весь скан.
+    """
+    try:
+        return await asyncio.wait_for(
+            loop.run_in_executor(None, func, ip), BLOCKING_TIMEOUT
+        )
+    except Exception:
+        return None
+
+
 async def _part_reverse_dns(loop: asyncio.AbstractEventLoop, ip: str) -> dict[str, Any]:
-    host = await loop.run_in_executor(None, _reverse_dns, ip)
+    host = await _run_blocking(loop, _reverse_dns, ip)
     return {"Hostname": host} if host else {}
 
 
 async def _part_rdap(loop: asyncio.AbstractEventLoop, ip: str) -> dict[str, Any]:
-    cidr = await loop.run_in_executor(None, _rdap_cidr, ip)
+    cidr = await _run_blocking(loop, _rdap_cidr, ip)
     return {"Network_CIDR": cidr} if cidr else {}
 
 
 async def _part_spamhaus(loop: asyncio.AbstractEventLoop, ip: str) -> dict[str, Any]:
-    listed = await loop.run_in_executor(None, _spamhaus_listed, ip)
+    listed = await _run_blocking(loop, _spamhaus_listed, ip)
     if listed is None:
         return {}
     return {"Spamhaus": "В списке" if listed else "Чисто"}
 
 
-async def _part_geo(session: aiohttp.ClientSession, ip: str) -> dict[str, Any]:
-    """Геолокация и ASN через ip-api.com."""
-    data = await _get_json(
-        session,
-        f"http://ip-api.com/json/{ip}",
-        params={"lang": "ru", "fields": "status,country,city,isp,as,lat,lon"},
-        retries=2,
-    )
+async def _part_geo(
+    session: aiohttp.ClientSession, ip: str, api_key: str = ""
+) -> dict[str, Any]:
+    """Геолокация и ASN через ip-api.com.
+
+    С Pro-ключом (``api_key``) запрос идёт по HTTPS (pro.ip-api.com); без ключа -
+    по бесплатному HTTP.
+    """
+    params = {"lang": "ru", "fields": "status,country,city,isp,as,lat,lon"}
+    if api_key:
+        url = GEO_API_PRO_URL + ip
+        params["key"] = api_key
+    else:
+        url = GEO_API_URL + ip
+    data = await _get_json(session, url, params=params, retries=2)
     if not data or data.get("status") != "success":
         return {}
     out: dict[str, Any] = {}
@@ -365,6 +417,17 @@ async def get_ip_info(
     Любой сбойный источник не прерывает остальные - его поля остаются дефолтными.
     """
     config = config or {}
+
+    # Defense-in-depth: функция безопасна независимо от вызывающего - на вход
+    # принимаются только валидные IP, иначе по «IP» не строится ни одного запроса.
+    try:
+        ipaddress.ip_address(ip)
+    except ValueError:
+        bad = empty_info(ip)
+        bad["Status"] = "Error"
+        bad["Error_Msg"] = "Некорректный IP"
+        return bad
+
     info = empty_info(ip)
 
     proxy_url: str | None = None
@@ -393,7 +456,7 @@ async def get_ip_info(
         if config.get("enable_bgp", True):
             parts.append(_part_bgp(loop, ip, session))
         if session is not None:
-            parts.append(_part_geo(session, ip))
+            parts.append(_part_geo(session, ip, config.get("ip_api_key", "")))
             if config.get("abuseipdb_api_key"):
                 parts.append(_part_abuseipdb(session, ip, config["abuseipdb_api_key"]))
         return await asyncio.gather(*parts, return_exceptions=True)
@@ -421,7 +484,7 @@ async def check_single_proxy(proxy: str, proxy_type: str) -> tuple[str, bool]:
     timeout = aiohttp.ClientTimeout(total=PROXY_TIMEOUT)
     try:
         async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
-            async with session.get("http://ip-api.com/json/8.8.8.8") as resp:
+            async with session.get(GEO_API_URL + "8.8.8.8") as resp:
                 return proxy, resp.status == 200
     except Exception:
         return proxy, False

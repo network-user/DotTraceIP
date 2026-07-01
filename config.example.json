@@ -1,0 +1,12 @@
+{
+    "threads": 10,
+    "proxy_type": "socks5",
+    "proxies_file": "data/proxies.txt",
+    "targets_file": "data/target_ips.txt",
+    "output_file": "data/results.txt",
+    "export_format": "all",
+    "abuseipdb_api_key": "",
+    "ip_api_key": "",
+    "enable_bgp": true,
+    "enable_spamhaus": true
+}

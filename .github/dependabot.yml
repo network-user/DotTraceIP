@@ -1,0 +1,15 @@
+version: 2
+updates:
+  # Зависимости Python (pyproject.toml / requirements.txt).
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+
+  # GitHub Actions: держит SHA-пины в .github/workflows актуальными.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5

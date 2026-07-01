@@ -1,6 +1,7 @@
 import csv
 import html
 import json
+import os
 from typing import Any
 
 # Каноничный порядок столбцов (совпадает с network.empty_info).
@@ -40,20 +41,55 @@ def _ordered_columns(results: list[dict[str, Any]]) -> list[str]:
     return present + extra
 
 
+# Символы, с которых формульный парсер Excel/LibreOffice/Sheets начинает
+# вычисление. Нейтрализуем ведущим апострофом - защита от CSV formula injection
+# в полях из недоверенных источников (PTR, whois, текст ошибок).
+_CSV_INJECTION_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _sanitize_cell(value: Any) -> Any:
+    """Экранирует строковую ячейку CSV от инъекции формул. Числа не трогает.
+
+    Ведущие пробелы игнорируются: `" =SUM()"` тоже нейтрализуется, иначе часть
+    парсеров таблиц обрежет пробел и выполнит формулу.
+    """
+    if isinstance(value, str):
+        stripped = value.lstrip()
+        if stripped and stripped[0] in _CSV_INJECTION_PREFIXES:
+            return "'" + value
+    return value
+
+
+def _atomic_write(path: str, text: str) -> None:
+    """Пишет файл атомарно: во временный файл рядом, затем os.replace.
+
+    Защищает от частично записанного отчёта при сбое и не следует по симлинку
+    на месте конечного файла (replace заменяет сам симлинк, а не его цель).
+    """
+    tmp = f"{path}.tmp"
+    with open(tmp, "w", encoding="utf-8", newline="") as f:
+        f.write(text)
+    os.replace(tmp, path)
+
+
 def export_json(results: list[dict[str, Any]], path: str) -> None:
     """Записывает результаты в JSON (UTF-8, с отступами, без экранирования кириллицы)."""
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(results, f, indent=2, ensure_ascii=False)
+    _atomic_write(path, json.dumps(results, indent=2, ensure_ascii=False))
 
 
 def export_csv(results: list[dict[str, Any]], path: str) -> None:
-    """Записывает результаты в CSV. Заголовок - объединение встреченных столбцов."""
+    """Записывает результаты в CSV. Заголовок - объединение встреченных столбцов.
+
+    Значения экранируются от инъекции формул (см. _sanitize_cell).
+    """
     columns = _ordered_columns(results) or list(COLUMNS)
-    with open(path, "w", encoding="utf-8", newline="") as f:
+    tmp = f"{path}.tmp"
+    with open(tmp, "w", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=columns, extrasaction="ignore", restval="")
         writer.writeheader()
         for row in results:
-            writer.writerow(row)
+            writer.writerow({key: _sanitize_cell(value) for key, value in row.items()})
+    os.replace(tmp, path)
 
 
 def export_html(results: list[dict[str, Any]], path: str) -> None:
@@ -80,8 +116,7 @@ def export_html(results: list[dict[str, Any]], path: str) -> None:
         head=head_cells,
         body=body_html,
     )
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(document)
+    _atomic_write(path, document)
 
 
 _HTML_TEMPLATE = """<!DOCTYPE html>

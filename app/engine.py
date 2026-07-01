@@ -5,6 +5,7 @@ from typing import Any
 
 from rich.console import Console, Group
 from rich.live import Live
+from rich.markup import escape
 from rich.panel import Panel
 from rich.progress import (
     BarColumn,
@@ -77,6 +78,16 @@ def run_proxy_check(
 # --------------------------------------------------------------------------- #
 # Live-дашборд
 # --------------------------------------------------------------------------- #
+def _safe(value: Any) -> str:
+    """Экранирует markup Rich в недоверенных строках (PTR, whois, текст ошибок).
+
+    Иначе владелец IP через PTR-запись или whois-описание вида ``[red]...[/]`` /
+    ``[link=...]`` может подделать раскраску дашборда и внедрить кликабельные
+    ссылки. Стили накладываются поверх уже экранированного значения.
+    """
+    return escape(str(value))
+
+
 def _reputation_cell(res: dict[str, Any]) -> str:
     parts: list[str] = []
     score = res.get("Abuse_Score")
@@ -102,19 +113,19 @@ def generate_live_table(recent_results: list[dict[str, Any]]) -> Table:
     for res in recent_results:
         if res.get("Status") == "Error":
             table.add_row(
-                f"[red]{res.get('IP', '?')}[/red]",
-                f"[red]{res.get('Error_Msg', '-')}[/red]",
+                f"[red]{_safe(res.get('IP', '?'))}[/red]",
+                f"[red]{_safe(res.get('Error_Msg', '-'))}[/red]",
                 "[red]-[/red]",
                 "[red]-[/red]",
                 "[red]-[/red]",
             )
         else:
-            location = f"{res.get('Country', NO_DATA)}, {res.get('City', NO_DATA)}"
+            location = f"{_safe(res.get('Country', NO_DATA))}, {_safe(res.get('City', NO_DATA))}"
             table.add_row(
-                res.get("IP", "?"),
+                _safe(res.get("IP", "?")),
                 location,
-                res.get("ISP", NO_DATA),
-                res.get("Hostname", NO_DATA),
+                _safe(res.get("ISP", NO_DATA)),
+                _safe(res.get("Hostname", NO_DATA)),
                 _reputation_cell(res),
             )
 
@@ -180,7 +191,7 @@ async def _scan_async(
                 recent.insert(0, data)
                 del recent[5:]
 
-                ip = data.get("IP", "?")
+                ip = _safe(data.get("IP", "?"))
                 if data.get("Status") == "Error":
                     desc = f"[red]Ошибка на {ip}[/red]"
                 else:
@@ -204,11 +215,13 @@ async def _scan_async(
         def report(data: dict[str, Any] | None) -> None:
             if data is None:
                 return
-            ip = data.get("IP", "?")
+            ip = _safe(data.get("IP", "?"))
             if data.get("Status") == "Error":
                 console.print(f"[{len(results)}/{total}] [red]{ip} - ошибка[/red]")
             else:
-                console.print(f"[{len(results)}/{total}] {ip} - {data.get('Country', NO_DATA)}")
+                console.print(
+                    f"[{len(results)}/{total}] {ip} - {_safe(data.get('Country', NO_DATA))}"
+                )
 
         console.print(f"[cyan]Сканирую {total} IP...[/cyan]")
         await consume(report)

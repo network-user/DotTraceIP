@@ -43,10 +43,13 @@ def settings_menu(config: dict[str, Any]) -> None:
         console.print(f"[8] Проверка Spamhaus: {_onoff(config.get('enable_spamhaus', True))}")
         bgp_state = _onoff(config.get("enable_bgp", True))
         console.print(f"[9] Обогащение BGP/ASN (Team Cymru): {bgp_state}")
+        ipapi_status = "[green]задан[/green]" if config.get("ip_api_key") else "[red]не задан[/red]"
+        console.print(f"[10] ip-api Pro-ключ (HTTPS-геолокация): {ipapi_status}")
         console.print("[0] Назад")
 
         choice = Prompt.ask(
-            "Выбор", choices=["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]
+            "Выбор",
+            choices=["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"],
         )
 
         if choice == "1":
@@ -74,6 +77,11 @@ def settings_menu(config: dict[str, Any]) -> None:
             config["enable_spamhaus"] = not config.get("enable_spamhaus", True)
         elif choice == "9":
             config["enable_bgp"] = not config.get("enable_bgp", True)
+        elif choice == "10":
+            new_key = Prompt.ask(
+                "ip-api Pro API-ключ (Enter - очистить)", password=True, default=""
+            )
+            config["ip_api_key"] = new_key.strip()
         elif choice == "0":
             save_config(config)
             console.print("[bold cyan]Настройки сохранены.[/bold cyan]")

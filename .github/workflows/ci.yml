@@ -6,14 +6,19 @@ on:
   pull_request:
     branches: [main]
 
+# Минимальные права для GITHUB_TOKEN: воркфлоу только читает код.
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # Actions запинены на SHA релизных тегов (Dependabot обновляет SHA + комментарий).
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
 
       - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b  # v5.3.0
         with:
           python-version: "3.12"
           cache: pip
@@ -29,3 +34,11 @@ jobs:
 
       - name: Type check
         run: mypy app/
+
+      - name: Dependency audit
+        # Информационный шаг: не валит сборку, чтобы транзитивные advisories не
+        # блокировали мерж. Смотри вывод и поднимай floor в pyproject при High+.
+        continue-on-error: true
+        run: |
+          pip install pip-audit
+          pip-audit

@@ -16,6 +16,7 @@ def base_config() -> dict[str, Any]:
         "output_file": "data/results.txt",
         "export_format": "all",
         "abuseipdb_api_key": "",
+        "ip_api_key": "",
         "enable_bgp": True,
         "enable_spamhaus": True,
     }

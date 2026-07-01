@@ -30,6 +30,7 @@ python main.py
 | Тесты | `pytest` (CI: `pytest --cov=app`) |
 | Lint | `ruff check app tests` |
 | Typecheck | `mypy app/` |
+| Аудит зависимостей | `pip-audit` (CI, informational) |
 | Build | - |
 
 Команды - из `pyproject.toml`, `requirements.txt` и `.github/workflows/ci.yml`.
@@ -50,7 +51,10 @@ DotTraceIP/
 │   ├── config.py        # load/save config.json с merge дефолтов
 │   └── utils.py         # файлы, валидация IP
 ├── tests/               # pytest + pytest-asyncio + aioresponses
-├── .github/workflows/ci.yml
+├── .github/
+│   ├── workflows/ci.yml # ruff + pytest + mypy + pip-audit
+│   └── dependabot.yml   # обновления pip + github-actions
+├── docs/audit/          # отчёты pre-deploy-audit (latest.md)
 └── data/                # входные/выходные данные (не в git)
 ```
 
@@ -67,6 +71,7 @@ DotTraceIP/
 ## Внешние источники
 
 - Используй только бесплатные API или free tier. AbuseIPDB пропускается без ключа; bgpview.io - фолбэк к Team Cymru.
+- Геолокация ip-api: без ключа - бесплатный HTTP; с `ip_api_key` - HTTPS через `pro.ip-api.com` (платный тариф ip-api).
 - Любой источник опционален: его сбой не должен прерывать сбор остальных полей или весь скан.
 
 ## Конфигурация (`config.json`)
@@ -78,7 +83,10 @@ DotTraceIP/
 | `targets_file` / `proxies_file` / `output_file` | пути к данным |
 | `export_format` | `txt` / `json` / `csv` / `html` / `all` |
 | `abuseipdb_api_key` | ключ AbuseIPDB (пусто - источник пропускается) |
+| `ip_api_key` | ip-api Pro-ключ: задан - геолокация по HTTPS (pro.ip-api.com); пусто - бесплатный HTTP |
 | `enable_bgp` / `enable_spamhaus` | тумблеры обогащения BGP/ASN и Spamhaus |
+
+Значения из `config.json` валидируются при загрузке (`config.load_config`): типы и диапазоны (`threads` ≤ `MAX_THREADS`), `proxy_type`/`export_format` по allowlist, пути целей/вывода удерживаются в пределах рабочего каталога.
 
 Не читай и не коммить `config.json` с реальным ключом. Не выводи значение ключа в логи.
 

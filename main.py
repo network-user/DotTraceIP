@@ -4,7 +4,7 @@ import sys
 from rich.console import Console
 
 from app.cli import run_app
-from app.config import load_config
+from app.config import MAX_THREADS, load_config
 from app.engine import run_scan
 from app.utils import filter_valid_ips, init_files, read_lines
 
@@ -48,6 +48,17 @@ def _run_headless(args: argparse.Namespace) -> int:
     return 0
 
 
+def _threads_arg(value: str) -> int:
+    """--threads: положительное целое, не выше MAX_THREADS (защита от перегруза)."""
+    try:
+        number = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError("ожидается целое число") from None
+    if number < 1:
+        raise argparse.ArgumentTypeError("должно быть >= 1")
+    return min(number, MAX_THREADS)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="DotTraceIP", description="Массовый async-анализ IP-адресов"
@@ -60,7 +71,7 @@ def main() -> None:
     scan.add_argument("--proxy-type", dest="proxy_type", choices=["http", "socks4", "socks5"])
     scan.add_argument("--proxies", help="файл с прокси")
     scan.add_argument("--output", help="файл результата")
-    scan.add_argument("--threads", type=int, help="лимит конкурентности")
+    scan.add_argument("--threads", type=_threads_arg, help="лимит конкурентности")
     scan.add_argument("--no-bgp", action="store_true", help="отключить BGP/ASN")
     scan.add_argument("--no-spamhaus", action="store_true", help="отключить Spamhaus")
 

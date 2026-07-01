@@ -10,6 +10,7 @@ from app.network import NO_DATA
 
 # Регекс-матчеры URL для aioresponses (совпадают независимо от query-строки).
 IP_API_RE = re.compile(r"http://ip-api\.com/json/.*")
+IP_API_PRO_RE = re.compile(r"https://pro\.ip-api\.com/json/.*")
 BGPVIEW_RE = re.compile(r"https://api\.bgpview\.io/ip/.*")
 ABUSEIPDB_RE = re.compile(r"https://api\.abuseipdb\.com/api/v2/check.*")
 
@@ -305,3 +306,57 @@ async def test_check_single_proxy_connection_error() -> None:
         m.get(IP_API_RE, exception=aiohttp.ClientError("boom"))
         _, ok = await net.check_single_proxy("1.2.3.4:8080", "http")
     assert ok is False
+
+
+# --------------------------------------------------------------------------- #
+# Безопасность: валидация IP, маскирование прокси-кредов
+# --------------------------------------------------------------------------- #
+def test_hide_credentials_colon_format_drops_creds() -> None:
+    # host:port:user:pass -> креды отброшены, последний октет скрыт.
+    assert net.hide_credentials("10.20.30.40:3128:bob:secret") == "10.20.30.***"
+
+
+async def test_get_ip_info_rejects_invalid_ip(base_config) -> None:
+    # Defense-in-depth: невалидный «IP» не приводит к сетевым запросам.
+    info = await net.get_ip_info("not-an-ip", None, "http", base_config)
+    assert info["Status"] == "Error"
+    assert info["IP"] == "not-an-ip"
+
+
+async def test_get_ip_info_masks_proxy_credentials(
+    no_blocking, base_config, geo_payload, monkeypatch
+) -> None:
+    # user:pass из прокси не должны попасть ни в одно поле результата.
+    monkeypatch.setattr(net, "_make_connector", lambda url: aiohttp.TCPConnector())
+    with aioresponses() as m:
+        m.get(IP_API_RE, payload=geo_payload)
+        m.get(BGPVIEW_RE, payload={"status": "error"})
+        info = await net.get_ip_info(
+            "8.8.8.8", ["user:secretpass@10.20.30.40:1080"], "http", base_config
+        )
+
+    blob = " ".join(str(value) for value in info.values())
+    assert "secretpass" not in blob
+    assert info["Proxy"] == "10.20.30.***"
+
+
+async def test_part_geo_uses_https_with_pro_key(geo_payload) -> None:
+    # С Pro-ключом геолокация идёт по HTTPS (pro.ip-api.com), не по HTTP.
+    with aioresponses() as m:
+        m.get(IP_API_PRO_RE, payload=geo_payload)
+        async with aiohttp.ClientSession() as session:
+            out = await net._part_geo(session, "8.8.8.8", "pro-key")
+    assert out["Country"] == "США"
+    assert out["ISP"] == "Google LLC"
+
+
+async def test_get_ip_info_geo_uses_https_when_key_set(
+    no_blocking, base_config, geo_payload, bgpview_payload
+) -> None:
+    # ip_api_key в config → гео-запрос уходит на HTTPS-эндпоинт, а не на HTTP.
+    base_config["ip_api_key"] = "pro-key"
+    with aioresponses() as m:
+        m.get(IP_API_PRO_RE, payload=geo_payload)
+        m.get(BGPVIEW_RE, payload=bgpview_payload)
+        info = await net.get_ip_info("8.8.8.8", None, "http", base_config)
+    assert info["Country"] == "США"

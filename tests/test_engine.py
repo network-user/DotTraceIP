@@ -52,3 +52,25 @@ def test_reputation_cell_marks_abuse() -> None:
     assert "spamhaus" in high and "80" in high
     assert "чисто" in clean
     assert empty == "-"
+
+
+def test_safe_escapes_rich_markup() -> None:
+    # Недоверенные PTR/whois с разметкой Rich экранируются, а не исполняются.
+    escaped = engine._safe("[red]evil[/red]")
+    assert escaped != "[red]evil[/red]"
+    assert "\\" in escaped
+    assert "evil" in escaped
+    assert engine._safe(123) == "123"
+
+
+def test_generate_live_table_handles_markup_payload() -> None:
+    # Таблица строится без падений на полях с разметкой; значения экранированы.
+    res = empty_info("8.8.8.8")
+    res.update({"Hostname": "[blink]x[/blink]", "ISP": "[link=file:///x]y[/link]"})
+    table = engine.generate_live_table([res])
+
+    out = io.StringIO()
+    Console(file=out, width=200).print(table)
+    text = out.getvalue()
+    assert "evil" not in text  # ничего лишнего
+    assert "x" in text and "y" in text
